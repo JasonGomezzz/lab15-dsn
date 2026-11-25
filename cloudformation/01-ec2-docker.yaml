@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: EC2 con Docker y aplicación web (nginx) desplegada automáticamente
+Description: EC2 con Docker y aplicacion web (nginx) desplegada automaticamente
 
 Parameters:
   # El enunciado usa t2.micro, pero esta cuenta (plan Free Tier nuevo) lo rechaza
@@ -53,9 +53,9 @@ Outputs:
     Value: !Ref WebServer
 
   PublicIP:
-    Description: IP Pública
+    Description: IP Publica
     Value: !GetAtt WebServer.PublicIp
 
   WebURL:
-    Description: URL de la aplicación
+    Description: URL de la aplicacion
     Value: !Sub http://${WebServer.PublicIp}

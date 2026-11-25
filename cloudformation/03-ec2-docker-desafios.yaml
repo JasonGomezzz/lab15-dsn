@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: EC2 con Docker, etiquetas, Key Pair y aplicación parametrizable que se redespliega al actualizar el stack
+Description: EC2 con Docker, etiquetas, Key Pair y aplicacion parametrizable que se redespliega al actualizar el stack
 
 Parameters:
   LatestAmiId:
@@ -178,11 +178,11 @@ Outputs:
     Value: !Ref WebServer
 
   PublicIP:
-    Description: IP Pública (Elastic IP)
+    Description: IP Publica (Elastic IP)
     Value: !Ref ElasticIP
 
   WebURL:
-    Description: URL de la aplicación
+    Description: URL de la aplicacion
     Value: !Sub http://${ElasticIP}
 
   SshCommand:

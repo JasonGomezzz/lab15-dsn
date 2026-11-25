@@ -1,0 +1,111 @@
+# Lab 15 · CloudFormation: una app Docker en EC2 sin tocar la consola de EC2
+
+Laboratorio GLAB-S15 de Desarrollo de Soluciones en la Nube (TECSUP, Jaime Farfán).
+Repositorio: https://github.com/JasonGomezzz/lab15-dsn
+
+Levanté una instancia EC2 con Docker y un contenedor web usando solo plantillas YAML de CloudFormation. Hice el stack desde la consola de AWS (como pide el enunciado) y comprobé todo también por terminal.
+
+## Qué hay en el repo
+
+| Archivo | Para qué sirve |
+|---|---|
+| `cloudformation/01-ec2-docker.yaml` | Pasos 1 a 4: EC2 + Security Group (puerto 80) + nginx en Docker |
+| `cloudformation/02-ec2-docker-hello.yaml` | Paso 5: misma plantilla con `nginxdemos/hello` |
+| `cloudformation/03-ec2-docker-desafios.yaml` | Desafíos 1, 2 y 3: etiquetas, Key Pair como parámetro e imagen elegible (`nginx`, `nginxdemos/hello`, `httpd`) |
+| `scripts/verificar.sh` | Muestra stack, recursos, instancia, respuesta HTTP y contenedor por SSH |
+| `scripts/limpiar.sh` | Borra el stack (y el Key Pair si se pide) para no pagar de más |
+
+Las capturas y salidas de terminal están en `docs/` y no se suben al repo (están en `.gitignore`).
+
+## Cómo reproducirlo
+
+Necesito AWS CLI v2 con credenciales configuradas y región `us-east-1`.
+
+```bash
+# 1. Validar las plantillas
+aws cloudformation validate-template --template-body file://cloudformation/01-ec2-docker.yaml
+
+# 2. Key Pair para los desafíos (la clave queda fuera del repo)
+aws ec2 create-key-pair --key-name lab-cloudformation-key \
+  --query KeyMaterial --output text > ~/.ssh/lab-cloudformation-key.pem
+chmod 400 ~/.ssh/lab-cloudformation-key.pem
+
+# 3. Crear el stack base (equivale a Create stack > Upload a template file)
+aws cloudformation create-stack --stack-name lab-cloudformation-docker \
+  --template-body file://cloudformation/01-ec2-docker.yaml
+aws cloudformation wait stack-create-complete --stack-name lab-cloudformation-docker
+
+# 4. Actualizar a la plantilla de desafíos (SshCidr = mi IP pública)
+aws cloudformation update-stack --stack-name lab-cloudformation-docker \
+  --template-body file://cloudformation/03-ec2-docker-desafios.yaml \
+  --capabilities CAPABILITY_IAM \
+  --parameters ParameterKey=KeyName,ParameterValue=lab-cloudformation-key \
+               ParameterKey=SshCidr,ParameterValue="$(curl -s https://checkip.amazonaws.com)/32" \
+               ParameterKey=AppImage,ParameterValue=nginxdemos/hello \
+               ParameterKey=InstanceType,UsePreviousValue=true \
+               ParameterKey=LatestAmiId,UsePreviousValue=true
+aws cloudformation wait stack-update-complete --stack-name lab-cloudformation-docker
+
+# 5. Cambiar la aplicación sin reemplazar la instancia
+aws cloudformation update-stack --stack-name lab-cloudformation-docker --use-previous-template \
+  --capabilities CAPABILITY_IAM \
+  --parameters ParameterKey=AppImage,ParameterValue=httpd \
+               ParameterKey=KeyName,UsePreviousValue=true ParameterKey=SshCidr,UsePreviousValue=true \
+               ParameterKey=InstanceType,UsePreviousValue=true ParameterKey=LatestAmiId,UsePreviousValue=true
+
+# 6. Ver todo
+./scripts/verificar.sh
+
+# 7. Limpieza
+./scripts/limpiar.sh lab-cloudformation-docker --con-key-pair
+```
+
+## Diferencias con el enunciado
+
+Fueron necesarias porque la plantilla original no funciona tal como está en una cuenta nueva.
+
+| # | El enunciado dice | Qué pasó | Qué hice |
+|---|---|---|---|
+| 1 | `InstanceType: t2.micro` | CloudFormation devolvió `CREATE_FAILED` con "The specified instance type is not eligible for Free Tier" y el stack quedó en `ROLLBACK_COMPLETE`. | Parametricé el tipo y usé `t3.micro`, que sí es elegible en mi cuenta. Borré el stack fallido y repetí. |
+| 2 | `ImageId: ami-0c02fb55956c7d316` | Es un Amazon Linux 2 de 2022 y solo existe en una región. | Tomo el AMI vigente de Amazon Linux 2023 desde un parámetro SSM. |
+| 3 | `amazon-linux-extras install docker` | Ese comando no existe en Amazon Linux 2023. | `dnf install -y docker`. |
+| 4 | SSH (22) abierto a `0.0.0.0/0` | El diagrama del enunciado solo muestra el puerto 80. | La plantilla 01 abre solo el 80. En la 03, SSH queda restringido a mi IP con `/32` y el parámetro rechaza `0.0.0.0/0`. |
+| 5 | Paso 5: cambiar `docker run` en `UserData` y actualizar | El stack llegó a `UPDATE_COMPLETE`, pero la página seguía mostrando nginx. `UserData` solo corre en el primer arranque de la instancia. | En la plantilla 03 el contenedor lo lanza `cfn-init` y `cfn-hup` vuelve a ejecutarlo cuando cambian los metadatos. Para eso agregué un rol IAM con un único permiso (`cloudformation:DescribeStackResource` sobre este stack). |
+| 6 | La IP pública cambia | CloudFormation detuvo e inició la instancia al actualizar y la IP cambió (de `100.53.114.93` a `32.201.52.154`). | Agregué una Elastic IP en la plantilla 03. |
+
+## Pruebas que hice
+
+| Caso | Qué probé | Resultado real |
+|---|---|---|
+| CP01 | Stack base con `t2.micro` | `ROLLBACK_COMPLETE`, error de Free Tier |
+| CP02 | Stack base con `t3.micro` | `CREATE_COMPLETE`, nginx responde 200 y muestra "Welcome to nginx!" |
+| CP03 | Actualizar a `nginxdemos/hello` (plantilla 02) | `UPDATE_COMPLETE`, la instancia conserva el ID pero la página sigue siendo nginx |
+| CP04 | Actualizar a la plantilla 03 | Cambios: 3 recursos nuevos, SG e instancia reemplazados. Nueva instancia con etiqueta `Name = Laboratorio-Docker` y página "Hello World" |
+| CP05 | Cambiar `AppImage` a `httpd` | Modify sin reemplazo. En unos 50 segundos la página pasó a "It works! Apache httpd" |
+| CP06 | `SshCidr` con `0.0.0.0/0` y con `999.1.1.1/32` | `ValidationError` en ambos. Con mi IP `/32`, acepta |
+| CP07 | SSH con el Key Pair y `docker ps` | Contenedor `web` con imagen `httpd`, puerto 80, y `docker` y `cfn-hup` activos |
+
+## Evidencia
+
+Las capturas son de pantalla completa en Brave, con la URL visible. Están numeradas en `docs/capturas/`:
+
+- `01` a `05`: creación del stack (plantilla subida, nombre, revisión, en progreso, completo con recursos).
+- `06` y `07`: instancia en EC2 y página de nginx por la IP pública.
+- `08` a `10`: actualización con la plantilla 02.
+- `12` a `15`: desafíos (parámetros, conjunto de cambios, progreso y página "Hello World").
+- `16` a `18`: cambio a `httpd`.
+- `19` y `20`: salidas del stack y la instancia final con su etiqueta.
+- `intento-fallido/`: el rollback por `t2.micro`.
+
+Las salidas de terminal están en `docs/evidencias/`.
+
+## Conclusiones (borrador, para ajustar con mis palabras)
+
+1. El primer stack falló porque `t2.micro` ya no entra en el plan gratuito de mi cuenta. Aprendí a leer los eventos del stack: el motivo estaba en `CREATE_FAILED` y no en la pantalla principal.
+2. Pensé que cambiar `UserData` y actualizar bastaba. El stack salió en verde pero seguía nginx. Entendí que `UserData` corre una sola vez y que para actualizar la app hace falta `cfn-init` con `cfn-hup`.
+3. Con la plantilla en un archivo pude borrar y recrear la infraestructura sin recordar clics. Cambiar de `nginx` a `hello` y luego a `httpd` fue cambiar una línea o un parámetro.
+4. Abrir SSH a todo internet era lo más fácil pero también lo más riesgoso. Prefiero que la plantilla no deje elegir `0.0.0.0/0`.
+
+## Pendiente
+
+- El stack sigue activo para revisarlo. Se elimina con `./scripts/limpiar.sh lab-cloudformation-docker --con-key-pair` (o desde la consola: CloudFormation > Stack > Delete).

@@ -71,7 +71,7 @@ Fueron necesarias porque la plantilla original no funciona tal como está en una
 | 3 | `amazon-linux-extras install docker` | Ese comando no existe en Amazon Linux 2023. | `dnf install -y docker`. |
 | 4 | SSH (22) abierto a `0.0.0.0/0` | El diagrama del enunciado solo muestra el puerto 80. | La plantilla 01 abre solo el 80. En la 03, SSH queda restringido a mi IP con `/32` y el parámetro rechaza `0.0.0.0/0`. |
 | 5 | Paso 5: cambiar `docker run` en `UserData` y actualizar | El stack llegó a `UPDATE_COMPLETE`, pero la página seguía mostrando nginx. `UserData` solo corre en el primer arranque de la instancia. | En la plantilla 03 el contenedor lo lanza `cfn-init` y `cfn-hup` vuelve a ejecutarlo cuando cambian los metadatos. Para eso agregué un rol IAM con un único permiso (`cloudformation:DescribeStackResource` sobre este stack). |
-| 6 | La IP pública cambia | CloudFormation detuvo e inició la instancia al actualizar y la IP cambió (de `100.53.114.93` a `32.201.52.154`). | Agregué una Elastic IP en la plantilla 03. |
+| 6 | La IP pública cambia | CloudFormation detuvo e inició la instancia al actualizar y la IP cambió (de `34.228.20.171` a `54.87.201.224`). | Agregué una Elastic IP en la plantilla 03. |
 
 ## Pruebas que hice
 
@@ -87,17 +87,19 @@ Fueron necesarias porque la plantilla original no funciona tal como está en una
 
 ## Evidencia
 
-Las capturas son de pantalla completa en Brave, con la URL visible. Están numeradas en `docs/capturas/`:
+Las capturas son de pantalla completa en Brave, con la URL visible y sin marcas de la herramienta de automatización. Están en `docs/capturas/`:
 
-- `01` a `05`: creación del stack (plantilla subida, nombre, revisión, en progreso, completo con recursos).
-- `06` y `07`: instancia en EC2 y página de nginx por la IP pública.
-- `08` a `10`: actualización con la plantilla 02.
-- `12` a `15`: desafíos (parámetros, conjunto de cambios, progreso y página "Hello World").
-- `16` a `18`: cambio a `httpd`.
-- `19` y `20`: salidas del stack y la instancia final con su etiqueta.
-- `intento-fallido/`: el rollback por `t2.micro`.
+| Archivos | Qué muestran |
+|---|---|
+| `F1` a `F3` | Primer intento con `t2.micro`: parámetros, `ROLLBACK_COMPLETE` y el motivo del error de Free Tier |
+| `01` a `07` | Creación del stack base: plantilla subida, nombre y parámetros, revisión, en progreso, `CREATE_COMPLETE`, recursos y salidas |
+| `08` y `09` | Instancia en EC2 y página "Welcome to nginx!" por la IP pública |
+| `10` a `12` | Actualización con la plantilla 02: plantilla subida, vista previa (`Modify`) y `UPDATE_COMPLETE` |
+| `13` a `18` | Plantilla 03: parámetros, conjunto de cambios, en progreso, `UPDATE_COMPLETE`, instancia con etiqueta `Name` y página "Hello World" |
+| `19` a `22` | Desafío nivel 3: `AppImage = httpd`, conjunto de cambios, `UPDATE_COMPLETE` y "It works!" de Apache |
+| `23` | Salidas finales del stack |
 
-Las salidas de terminal están en `docs/evidencias/`.
+Las salidas de terminal están en `docs/evidencias/` (`01` a `09`). Ambas carpetas quedan fuera del repo.
 
 ## Conclusiones (borrador, para ajustar con mis palabras)
 

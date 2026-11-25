@@ -2,6 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: EC2 con Docker y aplicación web (nginx) desplegada automáticamente
 
 Parameters:
+  # El enunciado usa t2.micro, pero esta cuenta (plan Free Tier nuevo) lo rechaza
+  # con "instance type is not eligible for Free Tier". t3.micro sí es elegible.
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues: [t3.micro, t3.small, t2.micro]
+    Description: Tipo de instancia EC2
+
   # AMI vigente de Amazon Linux 2023, resuelta por SSM en la región del stack.
   # El enunciado fija un AMI de Amazon Linux 2 de una sola región (ami-0c02fb...).
   LatestAmiId:
@@ -23,7 +31,7 @@ Resources:
   WebServer:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       ImageId: !Ref LatestAmiId
       SecurityGroupIds:
         - !GetAtt WebSecurityGroup.GroupId

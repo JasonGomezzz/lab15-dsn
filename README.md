@@ -101,13 +101,18 @@ Las capturas son de pantalla completa en Brave, con la URL visible y sin marcas 
 
 Las salidas de terminal están en `docs/evidencias/` (`01` a `09`). Ambas carpetas quedan fuera del repo.
 
-## Conclusiones (borrador, para ajustar con mis palabras)
+## Conclusiones
 
-1. El primer stack falló porque `t2.micro` ya no entra en el plan gratuito de mi cuenta. Aprendí a leer los eventos del stack: el motivo estaba en `CREATE_FAILED` y no en la pantalla principal.
-2. Pensé que cambiar `UserData` y actualizar bastaba. El stack salió en verde pero seguía nginx. Entendí que `UserData` corre una sola vez y que para actualizar la app hace falta `cfn-init` con `cfn-hup`.
-3. Con la plantilla en un archivo pude borrar y recrear la infraestructura sin recordar clics. Cambiar de `nginx` a `hello` y luego a `httpd` fue cambiar una línea o un parámetro.
-4. Abrir SSH a todo internet era lo más fácil pero también lo más riesgoso. Prefiero que la plantilla no deje elegir `0.0.0.0/0`.
+1. **El primer stack me falló y aprendí a leer los eventos.** Lo creé con `t2.micro` como decía el enunciado y terminó en `ROLLBACK_COMPLETE`. La causa estaba en el evento `CREATE_FAILED`: mi cuenta ya no acepta ese tipo de instancia en el plan gratuito. Lo cambié a `t3.micro` y desde entonces reviso siempre la pestaña Eventos antes de suponer qué pasó.
 
-## Pendiente
+2. **Pensé que actualizar el `UserData` bastaba, pero no.** Cambié `nginx` por `nginxdemos/hello`, el stack salió en `UPDATE_COMPLETE` y la página seguía mostrando nginx. Entendí que el `UserData` solo corre en el primer arranque. Para que la app cambie al actualizar tuve que usar `cfn-init` con `cfn-hup`, y ahí vi que un `UPDATE_COMPLETE` verde no garantiza que la aplicación cambió.
 
-- El stack sigue activo para revisarlo. Se elimina con `./scripts/limpiar.sh lab-cloudformation-docker --con-key-pair` (o desde la consola: CloudFormation > Stack > Delete).
+3. **La plantilla del enunciado no servía tal cual en una cuenta nueva.** `amazon-linux-extras` no existe en Amazon Linux 2023, así que usé `dnf`. El AMI fijo era de una sola región y de 2022, así que lo reemplacé por un parámetro de SSM que siempre trae el vigente. Me di cuenta de que copiar un laboratorio sin revisarlo habría dejado el stack roto desde el inicio.
+
+4. **Cuidé la seguridad sin romper lo que pedía el lab.** El enunciado abría el puerto 22 a todo internet. Lo dejé solo para mi IP con `/32` y el parámetro rechaza `0.0.0.0/0`, lo probé con un change set. Para que `cfn-hup` pudiera leer los metadatos creé un rol con un solo permiso, `DescribeStackResource` sobre este stack, en vez de darle acceso amplio.
+
+5. **Con la infraestructura en un archivo pude repetir todo sin acordarme de los clics.** Rehice el laboratorio completo desde cero y cambiar entre `nginx`, `hello` y `httpd` fue cambiar un parámetro. Eliminar el stack se llevó la instancia, la IP elástica y el rol de una sola vez, y no quedó nada cobrando. Para mí esa es la ventaja real de Infrastructure as Code.
+
+## Limpieza
+
+Al terminar eliminé el stack con `./scripts/limpiar.sh lab-cloudformation-docker --con-key-pair`. Comprobé que las dos instancias del lab quedaron en `terminated`, que no queda ninguna Elastic IP ni el rol IAM, y que el Key Pair se borró en AWS y en mi equipo.

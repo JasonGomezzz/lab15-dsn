@@ -20,8 +20,8 @@ Parameters:
   # El enunciado abre el 22 a 0.0.0.0/0; aquí se obliga a elegir un CIDR.
   SshCidr:
     Type: String
-    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
-    ConstraintDescription: Use un CIDR, por ejemplo 203.0.113.10/32
+    AllowedPattern: '^(?!0\.0\.0\.0/0$)((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)/([0-9]|[12]\d|3[0-2])$'
+    ConstraintDescription: Use un CIDR valido distinto de 0.0.0.0/0, por ejemplo 203.0.113.10/32
     Description: Rango desde el que se permite SSH (use su IP publica con /32)
 
   # Desafío nivel 3: aplicación desde Docker Hub

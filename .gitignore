@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Evidencias locales (capturas y salidas de consola)
+docs/
+
+# Credenciales y claves
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+*.tfstate*
+.terraform/
+terraform.tfvars
+
+# Editores
+.vscode/
+.idea/
+
+# Logs
+*.log
